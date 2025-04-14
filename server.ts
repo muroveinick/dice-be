@@ -3,6 +3,8 @@ import dotenv from "dotenv";
 import express from "express";
 import mongoose from "mongoose";
 import { Game } from "./models/Game.js";
+import { v4 as uuidv4 } from "uuid";
+import { IGame } from "./models/Game.js";
 
 dotenv.config();
 
@@ -26,14 +28,12 @@ app.use((req, res, next) => {
 
 let dbConnected = false;
 
-const mongoUri = process.env.MONGODB_URI || "mongodb://localhost:27017/gamehub";
+let mongoUri = `mongodb://${process.env.MONGO_USER}:${process.env.MONGO_PASSWORD}@${process.env.MONGODB_HOST}:${process.env.MONGODB_PORT}/${process.env.MONGO_INITDB_DATABASE}`;
 
-mongoose
-  .connect(mongoUri, {
-    user: process.env.MONGO_USERNAME,
-    pass: process.env.MONGO_PASSWORD,
-    authSource: "admin",
-  })
+console.log(mongoUri);
+
+await mongoose
+  .connect(mongoUri)
   .then(() => {
     console.log("Connected to MongoDB");
     dbConnected = true;
@@ -44,87 +44,88 @@ mongoose
     dbConnected = false;
   });
 
-const mockGames = [
+const mockGames: IGame[] = [
   {
-    _id: "1",
-    name: "Space Explorers",
-    description:
-      "Explore the vast universe and discover new planets in this multiplayer space adventure.",
-    players: 2,
-    maxPlayers: 10,
-    imageUrl:
-      "https://images.unsplash.com/photo-1581822261290-991b38693d1b?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=60",
+    id: "game-1",
+    name: "Game 1",
+    players: [],
+    currentPlayerIndex: 0,
+    gamePhase: "SETUP",
+    turnCount: 0,
+    grid: {
+      cells: [],
+      width: 10,
+      height: 10,
+    },
+    figures: [],
+    createdAt: new Date(),
+    lastActivity: new Date(),
   },
   {
-    _id: "2",
-    name: "Dragon Hunters",
-    description:
-      "Team up with friends to hunt legendary dragons and collect epic loot.",
-    players: 0,
-    maxPlayers: 5,
-    imageUrl:
-      "https://images.unsplash.com/photo-1642416379528-61365bd96773?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=60",
+    id: "game-2",
+    name: "Game 2",
+    players: [],
+    currentPlayerIndex: 0,
+    gamePhase: "SETUP",
+    turnCount: 0,
+    grid: {
+      cells: [],
+      width: 8,
+      height: 8,
+    },
+    figures: [],
+    createdAt: new Date(),
+    lastActivity: new Date(),
   },
   {
-    _id: "3",
-    name: "Cyber Wars",
-    description:
-      "Enter the digital battlefield and compete in this futuristic FPS game.",
-    players: 18,
-    maxPlayers: 20,
-    imageUrl:
-      "https://images.unsplash.com/photo-1542751371-adc38448a05e?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=60",
-  },
-  {
-    _id: "4",
-    name: "Medieval Kingdom",
-    description:
-      "Build your own medieval kingdom and form alliances with other players.",
-    players: 5,
-    maxPlayers: 50,
-    imageUrl:
-      "https://images.unsplash.com/photo-1630266866532-f94c1a72e5b9?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=60",
-  },
-  {
-    _id: "5",
-    name: "Racing Champions",
-    description:
-      "Compete in high-speed races across exotic locations around the world.",
-    players: 0,
-    maxPlayers: 8,
-    imageUrl:
-      "https://images.unsplash.com/photo-1547949003-9792a18a2601?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=60",
-  },
-  {
-    _id: "6",
-    name: "Zombie Apocalypse",
-    description:
-      "Survive the zombie apocalypse with your friends in this cooperative survival game.",
-    players: 3,
-    maxPlayers: 4,
-    imageUrl:
-      "https://images.unsplash.com/photo-1603208235206-8a3a6afb5179?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=60",
+    id: "game-3",
+    name: "Game 3",
+    players: [],
+    currentPlayerIndex: 0,
+    gamePhase: "SETUP",
+    turnCount: 0,
+    grid: {
+      cells: [],
+      width: 12,
+      height: 12,
+    },
+    figures: [],
+    createdAt: new Date(),
+    lastActivity: new Date(),
   },
 ];
 
 app.get("/api/games", async (_req, res) => {
-  console.log("GET /api/games called");
+  if (!dbConnected) {
+    console.error("Database not connected, running with mock data");
+    return res.json(mockGames);
+  }
 
   try {
-    if (dbConnected) {
-      const games = await Game.find();
-      res.json(games);
-    } else {
-      res.json(mockGames);
-    }
+    const games = await Game.find();
+    // Format games for API response if needed
+    const formattedGames = games.map((game) => ({
+      _id: game._id,
+      id: game.id,
+      name: game.id, // Using id as name for now
+      description: `Game with ${game.players.length} players`,
+      players: game.players.length,
+      maxPlayers: 10, // Setting a default max
+      currentPhase: game.gamePhase,
+    }));
+    res.json(formattedGames);
   } catch (error) {
     console.error("Error fetching games:", error);
-    res.json(mockGames);
   }
 });
 
 app.post("/api/games/:id/join", async (req, res) => {
   console.log(`POST /api/games/${req.params.id}/join called`);
+  const playerId = req.body.playerId || `player-${uuidv4()}`;
+  const playerName =
+    req.body.playerName || `Player ${Math.floor(Math.random() * 1000)}`;
+  const playerColor =
+    req.body.color || `#${Math.floor(Math.random() * 16777215).toString(16)}`;
 
   try {
     if (!dbConnected) {
@@ -137,11 +138,22 @@ app.post("/api/games/:id/join", async (req, res) => {
       return res.status(404).json({ message: "Game not found" });
     }
 
-    if (game.players >= game.maxPlayers) {
+    // Check if game is full (assuming max 10 players)
+    if (game.players.length >= 10) {
       return res.status(400).json({ message: "Game is full" });
     }
 
-    game.players += 1;
+    // Add player to the game
+    game.players.push({
+      id: playerId,
+      name: playerName,
+      color: playerColor,
+      score: 0,
+      isOnline: true,
+      lastActivity: new Date(),
+    });
+
+    game.lastActivity = new Date();
     await game.save();
 
     res.json({ message: "Joined game successfully", game });
@@ -159,10 +171,27 @@ const seedData = async () => {
 
   try {
     const count = await Game.countDocuments();
+    console.log(count);
+    
     if (count === 0) {
+      // Create sample games with the new structure
       const games = mockGames.map((game) => {
-        const { _id, ...gameData } = game;
-        return gameData;
+        return {
+          id: game.id,
+          name: game.name,
+          players: [],
+          currentPlayerIndex: 0,
+          gamePhase: "SETUP",
+          turnCount: 0,
+          grid: {
+            cells: [],
+            width: 10,
+            height: 10,
+          },
+          figures: [],
+          createdAt: new Date(),
+          lastActivity: new Date(),
+        };
       });
 
       await Game.insertMany(games);
