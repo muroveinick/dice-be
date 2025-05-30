@@ -223,8 +223,6 @@ export const resetPassword = asyncHandler(async (req: Request, res: Response) =>
 
   // Update password
   user.password = password;
-  // user.resetPasswordToken = undefined;
-  // user.resetPasswordExpires = undefined;
   await user.save();
 
   // Invalidate all refresh tokens for this user
@@ -240,12 +238,16 @@ export const resetPassword = asyncHandler(async (req: Request, res: Response) =>
 export const getMe = asyncHandler(async (req: Request, res: Response) => {
   console.log(!!req, !!res, !!req.user, !!res.user);
 
-  const { user } = (req as any).user;
+  const user = (req as any).user;
 
   console.log(user);
 
   res.status(200).json({
+    user: { 
+      email: user.email,
+      username: user.username,
+      role: user.role,
+    },
     status: "success",
-    data: user,
   });
 });

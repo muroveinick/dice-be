@@ -15,7 +15,7 @@ const connectDB = async (): Promise<boolean> => {
     const database = process.env.MONGO_INITDB_DATABASE;
 
     // Construct the URI with embedded credentials
-    const mongoUri = `${protocol}://${username}:${password}@${host}:${port}/${database}`;
+    const mongoUri = process.env.MONGODB_URI || `${protocol}://${username}:${password}@${host}:${port}/${database}`;
 
     console.log("MongoDB connection URI:", mongoUri);
 
