@@ -1,9 +1,10 @@
-import { IGame, IPlayer } from "@shared/interfaces.js";
+import { IGame, IJoinGameResponse, IPlayer } from "@shared/interfaces.js";
+import mongoose from "mongoose";
 import { Game } from "models/Game.js";
-import { v4 as uuidv4 } from "uuid";
-import { connectDB, dbConnected } from "../config/db.js";
+import { ApiError } from "src/utils/errorUtils.js";
+import { dbConnected } from "../config/db.js";
+import "../utils/proto.implementation.js";
 import { getSocketService } from "./socketService.js";
-import { SaveOptions } from "mongoose";
 
 const mockGames: IGame[] = [
   {
@@ -79,92 +80,72 @@ export const updateGame = async (gameId: string, gameData: Partial<IGame>): Prom
 /**
  * Join a game
  */
-export const joinGame = async (gameId: string, playerData: any): Promise<{ message: string; game: IGame; player: IPlayer }> => {
-  if (!dbConnected) {
-    const mockGame = mockGames[0]; // Use the first mock game for simplicity
-    const mockPlayer: IPlayer = {
-      config: {
-        color: getRandomColor(),
-        isAuto: false,
-      },
-      figures: [],
-    };
 
-    return {
-      message: "Joined game successfully (mock)",
-      game: mockGame,
-      player: mockPlayer,
-    };
-  }
+
+const patchPlayerInsideGame = async (game: mongoose.Document<any>, player: IPlayer, playerId: string) => {
+  player.id = playerId;
+  player.config.isAuto = false;
+
+  console.log("Patching player:", player);
+
+  game.markModified('players');
+  await game.save();
+}
+
+export const joinGame = async (gameId: string, playerId: string): Promise<IJoinGameResponse> => {
+
+  console.log("Joining game:", gameId);
+  console.log("Player id:", playerId);
 
   try {
     const game = await Game.findOne({ id: gameId });
 
     if (!game) {
-      throw new Error("Game not found");
+      throw ApiError.notFound("Game not found");
+    }
+
+    const is_player_already_in_game = game.players.find(player => player.id === playerId);
+
+    if (is_player_already_in_game) {
+      await patchPlayerInsideGame(game, is_player_already_in_game, playerId);
+      return { message: "Player already in game", game, player: is_player_already_in_game };
     }
 
     // Check if the game is full (assuming max 4 players for now)
-    if (game.players.length >= 4) {
-      throw new Error("Game is full");
+    // if (game.players.length >= 4) {
+    //   throw new Error("Game is full");
+    // }
+
+    // check if any available player slot is empty
+    const gameIsFull = game.players.every((player) => player.id);
+    if (gameIsFull) {
+      throw ApiError.badRequest("Game is full");
     }
 
-    // Create a new player object
-    const newPlayer: IPlayer = {
-      config: {
-        color: playerData.color || getRandomColor(),
-        isAuto: playerData.isAuto || false,
-      },
-      figures: [],
-    };
+    // bind random slot to player
+    const player_sorted = game.players.filter((player) => !player.id);
+    const player = player_sorted.random();
+    await patchPlayerInsideGame(game, player, playerId);
 
-    // Add player to the game
-    game.players.push(newPlayer);
-    game.lastActivity = new Date();
 
-    await game.save();
 
     // For WebSocket, we need to track some player identity
-    // We'll use an extended version of the player info with a client-side id
-    const playerInfo: IPlayer = {
-      config: newPlayer.config,
-      figures: newPlayer.figures,
-    };
-
     // Notify all clients in the game room about the new player
-    const socketService = getSocketService();
-    if (socketService) {
-      socketService.emitToGame(gameId, "player_joined", {
-        gameId,
-        player: playerInfo,
-      });
-    }
-
-    // Convert to IGame interface for return
-    const gameInfo: IGame = {
-      id: game.id,
-      name: game.name,
-      players: game.players,
-      currentPlayerIndex: game.currentPlayerIndex,
-      gamePhase: game.gamePhase,
-      turnCount: game.turnCount,
-      grid: {
-        cols: game.grid.cols,
-        rows: game.grid.rows,
-      },
-      figures: game.figures,
-      createdAt: game.createdAt,
-      lastActivity: game.lastActivity,
-    };
+    // const socketService = getSocketService();
+    // if (socketService) {
+    //   socketService.emitToGame(gameId, "player_joined", {
+    //     gameId,
+    //     player: playerInfo,
+    //   });
+    // }
 
     return {
       message: "Joined game successfully",
-      game: gameInfo,
-      player: playerInfo,
+      game,
+      player,
     };
   } catch (error) {
-    console.error("Error joining game:", error);
-    throw error;
+    throw ApiError.internal("Error joining game");
   }
 };
 

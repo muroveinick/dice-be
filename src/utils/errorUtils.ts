@@ -79,7 +79,6 @@ export class ApiError extends Error {
   toResponse(): ErrorResponse {
     console.log(this.message, this.code, this.details, this.statusCode);
     const r = createErrorResponse(this.message, this.code, this.details);
-    console.log(r);
     return r;
   }
 }

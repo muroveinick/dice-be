@@ -1,6 +1,6 @@
 import mongoose, { Document } from "mongoose";
 import bcrypt from "bcryptjs";
-import { IUser } from "@shared/interfaces.js";
+import { IUserScheme } from "@shared/interfaces.js";
 
 // Define interface for User document
 
@@ -54,4 +54,4 @@ UserSchema.methods.comparePassword = async function (candidatePassword: string) 
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-export const User = mongoose.model<IUser>("User", UserSchema);
+export const User = mongoose.model<IUserScheme>("User", UserSchema);

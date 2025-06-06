@@ -3,7 +3,7 @@ import { promisify } from "util";
 import { Request, Response, NextFunction } from "express";
 import { User } from "models/User.js";
 import { Token } from "models/Token.js";
-import { IUser } from "@shared/interfaces.js";
+import { IUserScheme } from "@shared/interfaces.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-this-in-production";
 
@@ -52,7 +52,7 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
     }
 
     // Grant access to protected route
-    (req as any).user = currentUser as IUser;
+    (req as any).user = currentUser as IUserScheme;
     next();
   } catch (error: any) {
 
@@ -82,7 +82,7 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
 
 // Restrict to certain roles
 export const restrictTo = (...roles: string[]) => {
-  return (req: Request & { user?: IUser }, res: Response, next: NextFunction) => {
+  return (req: Request & { user?: IUserScheme }, res: Response, next: NextFunction) => {
     if (!req.user || !roles.includes(req.user.role)) {
       return res.status(403).json({
         status: "fail",

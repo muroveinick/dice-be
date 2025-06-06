@@ -1,8 +1,9 @@
+import { IUser, IUserScheme } from "@shared/interfaces.js";
 import crypto from "crypto";
 import { User } from "models/User.js";
 import { ApiError } from "src/utils/errorUtils.js";
 
-export const _register = async (email: string, password: string, username: string) => {
+export const _register = async (email: string, password: string, username: string): Promise<IUser> => {
   if (password.length < 6) {
     throw ApiError.badRequest("Password must be at least 6 characters long");
   }
@@ -17,4 +18,11 @@ export const _register = async (email: string, password: string, username: strin
   });
 
   console.log("New user created:", newUser);
+
+  return {
+    id: newUser._id.toString(),
+    email,
+    username,
+    role: newUser.role,
+  };
 };

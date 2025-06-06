@@ -46,11 +46,16 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     throw ApiError.conflict("Email already in use", "EMAIL_IN_USE");
   }
 
-  await _register(email, password, username);
+  const user = await _register(email, password, username);
+
+  const token = await createAuthToken(user.id);
+
 
   res.status(201).json({
     status: "success",
     message: "User registered successfully. Please verify your email.",
+    user,
+    token
   });
 });
 
@@ -65,7 +70,9 @@ export const login = asyncHandler(async (req: Request, res: Response<ILoginRespo
   console.log(user);
   if (user) {
     const compare = await user.comparePassword(password);
-    console.log(compare);
+    if (!compare) {
+      throw ApiError.badRequest("Invalid password");
+    }
   } else {
     throw ApiError.notFound("User not found", "USER_NOT_FOUND");
   }
@@ -236,18 +243,20 @@ export const resetPassword = asyncHandler(async (req: Request, res: Response) =>
 
 // Get current user
 export const getMe = asyncHandler(async (req: Request, res: Response) => {
-  console.log(!!req, !!res, !!req.user, !!res.user);
 
-  const user = (req as any).user;
+  const user = req.user;
 
-  console.log(user);
+  if (!user) {
+    throw ApiError.unauthorized("User not found");
+  }
 
   res.status(200).json({
-    user: { 
+    user: {
       email: user.email,
       username: user.username,
       role: user.role,
+      id: user._id.toString(),
     },
     status: "success",
-  });
+  } as Pick<ILoginResponse, "user" | "status">);
 });
