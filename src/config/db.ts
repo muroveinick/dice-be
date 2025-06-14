@@ -16,12 +16,6 @@ const connectDB = async (): Promise<boolean> => {
 
     // Construct the URI with embedded credentials
     const mongoUri = process.env.MONGODB_URI || `${protocol}://${username}:${password}@${host}:${port}/${database}`;
-
-    console.log("MongoDB connection URI:", mongoUri);
-
-    const maskedUri = mongoUri.replace(/:([^@]+)@/, ":****@");
-    console.log(`Connecting to MongoDB: ${maskedUri}`);
-
     await mongoose.connect(mongoUri);
     console.log("Connected to MongoDB");
     dbConnected = true;

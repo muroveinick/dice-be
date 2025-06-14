@@ -9,7 +9,6 @@ import { ApiError } from "src/utils/errorUtils.js";
  */
 export const getGames = async (_req: Request, res: Response) => {
   try {
-    console.log("Fetching all games");
     
     const games = await gameService.getAllGames();
     res.json(games);
@@ -53,19 +52,10 @@ export const joinGame = async (req: Request, res: Response) => {
   }
 
   try {
-    const result = await gameService.joinGame(id, user._id.toString());
+    const result = await gameService.joinGame(id, user);
     res.json(result);
   } catch (error: any) {
     console.error("Error in joinGame controller:", error);
-
-    // Handle specific errors with appropriate status codes
-    // if (error instanceof ApiError) {
-    //   throw error;
-    // } else if (error.message === "Game not found") {
-    //   throw ApiError.notFound(error.message);
-    // } else if (error.message === "Game is full") {
-    //   throw ApiError.badRequest(error.message);
-    // }
 
     throw ApiError.internal("Error joining game");
   }
@@ -76,21 +66,19 @@ export const postGame = async (req: Request, res: Response) => {
     const game = req.body as IGame;
     const user = req.user;
 
-    console.log("User:", user);
-
     if (!user) {
       throw ApiError.unauthorized("User not found");
     }
 
     const if_existing = await gameService.getGameById(game.id);
-    console.log("Game already exists:", !!if_existing);
+    // console.log("Game already exists:", !!if_existing);
     let result;
     if (!if_existing) {
       result = await gameService.saveGame(req.body);
     } else {
       result = await gameService.updateGame(game.id, req.body);
     }
-    console.log("Result:", !!result);
+    // console.log("Result:", !!result);
 
     res.json(result);
   } catch (error) {

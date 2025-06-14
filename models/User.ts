@@ -1,6 +1,6 @@
-import mongoose, { Document } from "mongoose";
-import bcrypt from "bcryptjs";
 import { IUserScheme } from "@shared/interfaces.js";
+import bcrypt from "bcryptjs";
+import mongoose from "mongoose";
 
 // Define interface for User document
 

@@ -15,7 +15,7 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
       token = req.headers.authorization.split(" ")[1];
     }
 
-    console.log('token', token);
+    // console.log('token', token);
     
 
     if (!token) {

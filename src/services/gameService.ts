@@ -1,54 +1,17 @@
-import { IGame, IJoinGameResponse, IPlayer } from "@shared/interfaces.js";
-import mongoose from "mongoose";
+import { IGame, IJoinGameResponse, IPlayer, IUserScheme } from "@shared/interfaces.js";
+import { SocketEvents } from "@shared/socket.js";
 import { Game } from "models/Game.js";
+import mongoose from "mongoose";
 import { ApiError } from "src/utils/errorUtils.js";
-import { dbConnected } from "../config/db.js";
 import "../utils/proto.implementation.js";
-import { getSocketService } from "./socketService.js";
-
-const mockGames: IGame[] = [
-  {
-    id: "game-1",
-    name: "Game 1",
-    players: [],
-    currentPlayerIndex: 0,
-    gamePhase: "SETUP",
-    turnCount: 0,
-    grid: {
-      cols: 10,
-      rows: 10,
-    },
-    figures: [],
-    createdAt: new Date(),
-    lastActivity: new Date(),
-  },
-];
+import { SocketService } from "./socketService.js";
 
 /**
  * Get all games
  */
 export const getAllGames = async (): Promise<IGame[]> => {
-  if (!dbConnected) {
-    console.error("Database not connected, running with mock data");
-    return mockGames;
-  }
-
-  const games = await Game.find();
-  return games.map((game) => ({
-    id: game.id,
-    name: game.name,
-    players: game.players,
-    currentPlayerIndex: game.currentPlayerIndex,
-    gamePhase: game.gamePhase,
-    turnCount: game.turnCount,
-    grid: {
-      cols: game.grid.cols,
-      rows: game.grid.rows,
-    },
-    figures: game.figures,
-    createdAt: game.createdAt,
-    lastActivity: game.lastActivity,
-  }));
+  const games = await Game.find().limit(10);
+  return games;
 };
 
 /**
@@ -83,32 +46,23 @@ export const updateGame = async (gameId: string, gameData: Partial<IGame>): Prom
 
 
 const patchPlayerInsideGame = async (game: mongoose.Document<any>, player: IPlayer, playerId: string) => {
-  player.id = playerId;
-  player.config.isAuto = false;
-
   console.log("Patching player:", player);
 
+  player.id = playerId;
+  player.config.isAuto = false;
   game.markModified('players');
   await game.save();
 }
 
-export const joinGame = async (gameId: string, playerId: string): Promise<IJoinGameResponse> => {
+export const joinGame = async (gameId: string, user: IUserScheme): Promise<IJoinGameResponse> => {
 
-  console.log("Joining game:", gameId);
-  console.log("Player id:", playerId);
+  const userId = user._id.toString();
 
   try {
     const game = await Game.findOne({ id: gameId });
 
     if (!game) {
       throw ApiError.notFound("Game not found");
-    }
-
-    const is_player_already_in_game = game.players.find(player => player.id === playerId);
-
-    if (is_player_already_in_game) {
-      await patchPlayerInsideGame(game, is_player_already_in_game, playerId);
-      return { message: "Player already in game", game, player: is_player_already_in_game };
     }
 
     // Check if the game is full (assuming max 4 players for now)
@@ -122,76 +76,33 @@ export const joinGame = async (gameId: string, playerId: string): Promise<IJoinG
       throw ApiError.badRequest("Game is full");
     }
 
-    // bind random slot to player
-    const player_sorted = game.players.filter((player) => !player.id);
-    const player = player_sorted.random();
-    await patchPlayerInsideGame(game, player, playerId);
+    let player: IPlayer;
+    const is_player_already_in_game = game.players.find(player => player.id === userId);
 
+    if (is_player_already_in_game) {
+      player = is_player_already_in_game;
+    } else {
+      // bind random slot to player
+      const player_sorted = game.players.filter((player) => !player.id);
+      player = player_sorted.random();
+    }
+
+    const response: IJoinGameResponse = {
+      gameId,
+      user: {
+        id: userId,
+        username: user.username
+      },
+      player
+    };
 
 
     // For WebSocket, we need to track some player identity
-    // Notify all clients in the game room about the new player
-    // const socketService = getSocketService();
-    // if (socketService) {
-    //   socketService.emitToGame(gameId, "player_joined", {
-    //     gameId,
-    //     player: playerInfo,
-    //   });
-    // }
+    await patchPlayerInsideGame(game, response.player, userId);
+    SocketService.getInstance().processJoinGame(response);
+    return response;
 
-    return {
-      message: "Joined game successfully",
-      game,
-      player,
-    };
   } catch (error) {
     throw ApiError.internal("Error joining game");
   }
 };
-
-/**
- * Leave a game
- */
-export const leaveGame = async (gameId: string, clientId: string): Promise<{ message: string }> => {
-  if (!dbConnected) {
-    return { message: "Left game successfully (mock)" };
-  }
-
-  try {
-    const game = await Game.findOne({ id: gameId });
-
-    if (!game) {
-      throw new Error("Game not found");
-    }
-
-    // In a real implementation, you would need to map clientId to the actual
-    // player in the database. For simplicity, we'll just remove the first player
-    // as an example.
-    if (game.players.length > 0) {
-      game.players.shift();
-      game.lastActivity = new Date();
-
-      await game.save();
-    }
-
-    // Notify all clients in the game room
-    const socketService = getSocketService();
-    if (socketService) {
-      socketService.emitToGame(gameId, "player_left", {
-        gameId,
-        clientId,
-      });
-    }
-
-    return { message: "Left game successfully" };
-  } catch (error) {
-    console.error("Error leaving game:", error);
-    throw error;
-  }
-};
-
-// Helper function to generate a random color
-function getRandomColor(): string {
-  const colors = ["red", "blue", "green", "yellow", "purple", "orange"];
-  return colors[Math.floor(Math.random() * colors.length)];
-}

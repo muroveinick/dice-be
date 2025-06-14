@@ -1,3 +1,6 @@
 [submodule "dice-shared"]
 	path = dice-shared
-	url = https://github.com/muroveinick/dice-shared.git
+	url = /home/artemii/Documents/work/dice-shared
+[submodule "dice-shred"]
+	path = dice-shred
+	url = ../dice-shared

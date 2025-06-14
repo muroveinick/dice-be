@@ -4,22 +4,16 @@ import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { connectDB } from "./config/db.js";
-import apiRoutes from "./routes/index.js";
-import { requestLogger } from "./middleware/logger.js";
 import { errorHandler } from "./middleware/errorHandler.js";
-import { initSocketService } from "./services/socketService.js";
-import { NextFunction, Request, Response } from "express";
+import { requestLogger } from "./middleware/logger.js";
+import apiRoutes from "./routes/index.js";
+import { SocketService, defaultConfig } from "./services/socketService.js";
 
 dotenv.config();
 
 const app = express();
 const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: {
-    origin: "*", // In production, change to specific origin
-    methods: ["GET", "POST"],
-  },
-});
+export const io = new Server(httpServer, defaultConfig);
 
 const PORT = process.env.PORT || 3001;
 
@@ -39,7 +33,7 @@ app.use(requestLogger);
 
 await connectDB();
 
-const socketService = initSocketService(io);
+const socketService = SocketService.getInstance();
 
 app.use("/api", apiRoutes);
 
