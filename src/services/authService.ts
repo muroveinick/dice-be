@@ -1,4 +1,4 @@
-import { IUser, IUserScheme } from "@shared/interfaces.js";
+import { IUser } from "@shared/interfaces.js";
 import crypto from "crypto";
 import { User } from "models/User.js";
 import { ApiError } from "src/utils/errorUtils.js";

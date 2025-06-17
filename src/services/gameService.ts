@@ -1,5 +1,4 @@
 import { IGame, IJoinGameResponse, IPlayer, IUserScheme } from "@shared/interfaces.js";
-import { SocketEvents } from "@shared/socket.js";
 import { Game } from "models/Game.js";
 import mongoose from "mongoose";
 import { ApiError } from "src/utils/errorUtils.js";
@@ -18,10 +17,12 @@ export const getAllGames = async (): Promise<IGame[]> => {
  * Get a single game by ID
  */
 export const getGameById = async (gameId: string): Promise<IGame | null> => {
-  const game = await Game.findOne<IGame>({ id: gameId });
-  console.log("Game found:", game?.id);
+  const game = await Game.findById(gameId);
+  console.log("Game found:", game?._id);
 
-  if (!game) return null;
+  if (!game) {
+    return null;
+  };
 
   return game;
 };
@@ -36,7 +37,7 @@ export const saveGame = async (gameData: Partial<IGame>): Promise<IGame> => {
 };
 
 export const updateGame = async (gameId: string, gameData: Partial<IGame>): Promise<IGame> => {
-  const game = await Game.findOneAndUpdate<IGame>({ id: gameId }, gameData, { new: true });
+  const game = await Game.findByIdAndUpdate(gameId, gameData, { new: true });
   return game!;
 };
 
@@ -59,7 +60,7 @@ export const joinGame = async (gameId: string, user: IUserScheme): Promise<IJoin
   const userId = user._id.toString();
 
   try {
-    const game = await Game.findOne({ id: gameId });
+    const game = await Game.findById(gameId);
 
     if (!game) {
       throw ApiError.notFound("Game not found");

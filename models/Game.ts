@@ -3,11 +3,6 @@ import mongoose, { Schema } from "mongoose";
 
 // Game schema definition
 const gameSchema = new Schema<IGame>({
-  id: {
-    type: String,
-    required: true,
-    unique: true,
-  },
   name: {
     type: String,
     required: true,

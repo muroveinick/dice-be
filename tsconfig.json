@@ -14,6 +14,6 @@
       "@shared/*": ["dice-shared/*"]
     }
   },
-  "include": ["./**/*.ts", "./types.d.ts"],
+  "include": ["./**/*.ts", "./environment.d.ts"],
   "exclude": ["node_modules"]
 }

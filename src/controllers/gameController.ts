@@ -3,13 +3,10 @@ import * as gameService from "../services/gameService.js";
 import { IGame } from "@shared/interfaces.js";
 import { ApiError } from "src/utils/errorUtils.js";
 
-/**
- * Get all games
- * @route GET /api/games
- */
+
 export const getGames = async (_req: Request, res: Response) => {
   try {
-    
+
     const games = await gameService.getAllGames();
     res.json(games);
   } catch (error) {
@@ -45,7 +42,7 @@ export const joinGame = async (req: Request, res: Response) => {
   const user = req.user
 
   console.log("User:", user);
-  
+
 
   if (!user) {
     throw ApiError.unauthorized("User not found");
@@ -70,13 +67,13 @@ export const postGame = async (req: Request, res: Response) => {
       throw ApiError.unauthorized("User not found");
     }
 
-    const if_existing = await gameService.getGameById(game.id);
+    const if_existing = await gameService.getGameById(game._id);
     // console.log("Game already exists:", !!if_existing);
     let result;
     if (!if_existing) {
       result = await gameService.saveGame(req.body);
     } else {
-      result = await gameService.updateGame(game.id, req.body);
+      result = await gameService.updateGame(game._id, req.body);
     }
     // console.log("Result:", !!result);
 

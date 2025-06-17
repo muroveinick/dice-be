@@ -13,7 +13,7 @@ export class SocketGameUtils {
       throw new Error("Invalid turn update data");
     }
 
-    const game = await Game.findOne({ id: gameId });
+    const game = await Game.findById(gameId);
     if (!game) {
       throw new Error("Game not found");
     }
@@ -134,7 +134,7 @@ export class SocketGameUtils {
     if (!user) {
       throw new Error("User not found");
     }
-    const game = await Game.findOne({ id: gameId });
+    const game = await Game.findById(gameId);
     if (!game) {
       throw new Error("Game not found");
     }

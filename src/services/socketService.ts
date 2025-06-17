@@ -68,7 +68,7 @@ export class SocketService {
 
 
   emitToGame<T>(gameId: string, event: SocketEvents, data: T): void {
-    console.log(`Emitting ${event} to game ${gameId}:`, data);
+    // console.log(`Emitting ${event} to game ${gameId}:`, data);
     this.io.to(gameId).emit(event, data);
   }
 

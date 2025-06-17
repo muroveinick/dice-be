@@ -8,8 +8,8 @@ import { _register } from "src/services/authService.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { ApiError } from "../utils/errorUtils.js";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-this-in-production";
-const JWT_REFRESH_EXPIRES = process.env.JWT_REFRESH_EXPIRES || "7d";
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_REFRESH_EXPIRES = process.env.JWT_REFRESH_EXPIRES;
 
 const createAuthToken = async (userId: string): Promise<string> => {
   const payload = { id: userId };
@@ -155,24 +155,8 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
-// Verify email
-export const verifyEmail = asyncHandler(async (req: Request, res: Response) => {
-  const { token } = req.params;
-  const user = await User.findOne({ verificationToken: token });
 
-  if (!user) {
-    throw ApiError.badRequest("Invalid or expired verification token", "INVALID_TOKEN");
-  }
-
-  // Update user
-  await user.save();
-
-  res.status(200).json({
-    status: "success",
-    message: "Email verified successfully",
-  });
-});
-
+// TODO reset password
 // Request password reset
 export const forgotPassword = asyncHandler(async (req: Request, res: Response) => {
   const { email } = req.body;
