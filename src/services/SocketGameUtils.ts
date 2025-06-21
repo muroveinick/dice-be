@@ -1,11 +1,10 @@
-import { IGame, IJoinGameResponse } from '@shared/interfaces.js';
-import { Game } from 'models/Game.js';
-import { User } from 'models/User.js';
-import { IGameBattlePayload, IGameBattleResponse, INextTurnPayload, INextTurnResponse, ITurnUpdatePayload, ITurnUpdateResponse, TurnMessageType } from '../../dice-shared/socket.js';
-import { log } from 'console';
+import { IFigure, IGame, IJoinGameResponse } from "@shared/interfaces.js";
+import { Game } from "models/Game.js";
+import { User } from "models/User.js";
+import { IGameBattlePayload, IGameBattleResponse, INextTurnPayload, INextTurnResponse, ITurnUpdatePayload, ITurnUpdateResponse, TurnMessageType } from "../../dice-shared/socket.js";
+import { log } from "console";
 
 export class SocketGameUtils {
-  
   static async processTurnUpdate(inputData: ITurnUpdatePayload): Promise<ITurnUpdateResponse> {
     const { data, type, gameId } = inputData;
 
@@ -23,13 +22,13 @@ export class SocketGameUtils {
     switch (type) {
       case TurnMessageType.MESSAGE_TYPE_TURN_UPDATE:
         payload = this.processBattle(data as IGameBattlePayload, game);
-        game.markModified('figures');
-        game.markModified('players');
+        game.markModified("figures");
+        game.markModified("players");
         break;
       case TurnMessageType.MESSAGE_TYPE_NEXT_TURN:
         payload = this.processNextTurn(data as INextTurnPayload, game);
-        game.markModified('currentPlayerIndex')
-        game.markModified('turnCount')
+        game.markModified("currentPlayerIndex");
+        game.markModified("turnCount");
         break;
       default:
         throw new Error("Invalid turn update type");
@@ -38,13 +37,29 @@ export class SocketGameUtils {
     const response: ITurnUpdateResponse = {
       type,
       data: payload,
-      gameId
+      gameId,
     };
 
     game.lastActivity = new Date();
     await game.save();
-    
+
     return response;
+  }
+
+  private static supplyPlayerFigures(game: IGame, playerIndex: number, supplyAmount: number): Array<Pick<IFigure, "config" | "dice">> {
+    const player = game.players[playerIndex];
+    const figure = player.figures.map((fig) => game.figures.find((f) => f.config.index === fig)!);
+
+    if (figure.length === 0) {
+      return [];
+    }
+
+    for (let i = 0; i < supplyAmount; i++) {
+      const random = figure.random();
+      random.dice++;
+    }
+
+    return figure;
   }
 
   static processNextTurn(inputData: INextTurnPayload, game: IGame): INextTurnResponse {
@@ -62,6 +77,7 @@ export class SocketGameUtils {
       newPlayerIndex: nextPlayerIndex,
       turnCount: ++game.turnCount,
       gamePhase: game.gamePhase,
+      playerFigures: SocketGameUtils.supplyPlayerFigures(game, nextPlayerIndex, inputData.supplyAmount),
     };
 
     return response;
@@ -69,18 +85,15 @@ export class SocketGameUtils {
 
   static processBattle(inputData: IGameBattlePayload, game: IGame): IGameBattleResponse {
     const { attacker, defender } = inputData;
-    const attackerFigure = game.figures.find(fig => fig.config.index === attacker);
-    const defenderFigure = game.figures.find(fig => fig.config.index === defender);
-
-    console.log(JSON.stringify(attackerFigure));
-    console.log(JSON.stringify(defenderFigure));
+    const attackerFigure = game.figures.find((fig) => fig.config.index === attacker);
+    const defenderFigure = game.figures.find((fig) => fig.config.index === defender);
 
     if (!attackerFigure || !defenderFigure) {
       throw new Error("Invalid figure indices");
     }
 
-    const attackerPlayer = game.players.find(player => player.figures.includes(attacker) && player.config.color === attackerFigure.config.color);
-    const defenderPlayer = game.players.find(player => player.figures.includes(defender) && player.config.color === defenderFigure.config.color);
+    const attackerPlayer = game.players.find((player) => player.figures.includes(attacker) && player.config.color === attackerFigure.config.color);
+    const defenderPlayer = game.players.find((player) => player.figures.includes(defender) && player.config.color === defenderFigure.config.color);
 
     if (!attackerPlayer || !defenderPlayer) {
       throw new Error("Player and figure mismatch");
@@ -91,9 +104,6 @@ export class SocketGameUtils {
 
     const attackerRoll = this.rollDice(attackerDice);
     const defenderRoll = this.rollDice(defenderDice);
-
-    console.log("Attacker Roll:", attackerRoll);
-    console.log("Defender Roll:", defenderRoll);
 
     let winner;
     if (attackerRoll > defenderRoll) {
@@ -138,7 +148,7 @@ export class SocketGameUtils {
     if (!game) {
       throw new Error("Game not found");
     }
-    const player = game.players.find(p => p.id === userId);
+    const player = game.players.find((p) => p.id === userId);
     if (!player) {
       throw new Error("Player not found");
     }
@@ -149,7 +159,7 @@ export class SocketGameUtils {
       user: {
         id: userId,
         username: user.username,
-      }
+      },
     };
 
     log(`Enriched join game payload for gameId: ${gameId}, ${response}`);

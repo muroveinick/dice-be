@@ -47,7 +47,7 @@ export class SocketService {
       console.log(`User disconnected: ${socket.id}`);
     });
 
-    // // Join game room
+    // Join game room
     socket.on(SocketEvents.JOIN_GAME, async (payload: IJoinGamePayload) => {
       const { gameId, userId } = payload;
 
