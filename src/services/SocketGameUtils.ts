@@ -1,12 +1,13 @@
-import { IFigure, IGame, IJoinGameResponse } from "@shared/interfaces.js";
+import { IFigure, IGame, IPlayer } from "@shared/interfaces.js";
 import { Game } from "models/Game.js";
 import { User } from "models/User.js";
-import { IGameBattlePayload, IGameBattleResponse, INextTurnPayload, INextTurnResponse, ITurnUpdatePayload, ITurnUpdateResponse, TurnMessageType } from "../../dice-shared/socket.js";
-import { log } from "console";
+import { IJoinGameResponse, IGameBattlePayload, IGameBattleResponse, INextTurnPayload, INextTurnResponse, ITurnUpdatePayload, ITurnUpdateResponse, TurnMessageType } from "../../dice-shared/socket.js";
+import "../utils/proto.implementation.js";
 
 export class SocketGameUtils {
   static async processTurnUpdate(inputData: ITurnUpdatePayload): Promise<ITurnUpdateResponse> {
     const { data, type, gameId } = inputData;
+    console.log(`Received turn update: ${JSON.stringify(inputData)}`);
 
     if (!gameId || !data) {
       throw new Error("Invalid turn update data");
@@ -22,13 +23,9 @@ export class SocketGameUtils {
     switch (type) {
       case TurnMessageType.MESSAGE_TYPE_TURN_UPDATE:
         payload = this.processBattle(data as IGameBattlePayload, game);
-        game.markModified("figures");
-        game.markModified("players");
         break;
       case TurnMessageType.MESSAGE_TYPE_NEXT_TURN:
         payload = this.processNextTurn(data as INextTurnPayload, game);
-        game.markModified("currentPlayerIndex");
-        game.markModified("turnCount");
         break;
       default:
         throw new Error("Invalid turn update type");
@@ -41,43 +38,83 @@ export class SocketGameUtils {
     };
 
     game.lastActivity = new Date();
-    await game.save();
+    // await game.save();
+    await Game.findOneAndUpdate(
+      { _id: gameId }, // filter
+      {
+        $set: {
+          currentPlayerIndex: game.currentPlayerIndex,
+          figures: game.figures,
+          players: game.players,
+          lastActivity: new Date(),
+          turnCount: game.turnCount,
+          gamePhase: game.gamePhase,
+        },
+      },
+      { new: true } // return updated doc if you need it
+    );
 
     return response;
   }
 
   private static supplyPlayerFigures(game: IGame, playerIndex: number, supplyAmount: number): Array<Pick<IFigure, "config" | "dice">> {
     const player = game.players[playerIndex];
-    const figure = player.figures.map((fig) => game.figures.find((f) => f.config.index === fig)!);
+    const figures = player.figures.map((fig) => game.figures.find((f) => f.config.index === fig)!);
 
-    if (figure.length === 0) {
+    const MAX_DICE = 8;
+
+    if (figures.length === 0) {
       return [];
     }
 
-    for (let i = 0; i < supplyAmount; i++) {
-      const random = figure.random();
-      random.dice++;
+    const copy = figures.filter((fig) => fig.dice < MAX_DICE);
+    if (supplyAmount > 0) {
+      for (let i = 0; i < supplyAmount; i++) {
+        if (copy.length === 0) {
+          break;
+        }
+        const random = copy.random();
+        random.dice++;
+        if (random.dice === MAX_DICE) {
+          copy.delete(random);
+        }
+      }
     }
 
-    return figure;
+    return figures.map((fig) => ({ config: fig.config, dice: fig.dice }));
+  }
+
+  private static updateNextIndex(game: IGame, currentPlayerIndex: number): number {
+    // Find next player that is not defeated
+    let nextPlayerIndex = (currentPlayerIndex + 1) % game.players.length;
+    let iterations = 0;
+
+    while (game.players[nextPlayerIndex].config.isDefeated && iterations < game.players.length) {
+      nextPlayerIndex = (nextPlayerIndex + 1) % game.players.length;
+      iterations++;
+    }
+    if (iterations >= game.players.length - 1) {
+      nextPlayerIndex = currentPlayerIndex;
+      game.gamePhase = "FINISHED";
+    }
+    game.currentPlayerIndex = nextPlayerIndex;
+
+    return nextPlayerIndex;
   }
 
   static processNextTurn(inputData: INextTurnPayload, game: IGame): INextTurnResponse {
-    const { currentPlayerIndex } = inputData;
+    const { currentPlayerIndex, supplyAmount } = inputData;
     const currentPlayer = game.players[currentPlayerIndex];
 
     if (!currentPlayer) {
       throw new Error("Invalid player index");
     }
 
-    const nextPlayerIndex = (currentPlayerIndex + 1) % game.players.length;
-    game.currentPlayerIndex = nextPlayerIndex;
-
     const response: INextTurnResponse = {
-      newPlayerIndex: nextPlayerIndex,
+      newPlayerIndex: this.updateNextIndex(game, currentPlayerIndex),
       turnCount: ++game.turnCount,
       gamePhase: game.gamePhase,
-      playerFigures: SocketGameUtils.supplyPlayerFigures(game, nextPlayerIndex, inputData.supplyAmount),
+      playerFigures: SocketGameUtils.supplyPlayerFigures(game, currentPlayerIndex, supplyAmount),
     };
 
     return response;
@@ -90,6 +127,10 @@ export class SocketGameUtils {
 
     if (!attackerFigure || !defenderFigure) {
       throw new Error("Invalid figure indices");
+    }
+
+    if (attackerFigure.config.color === defenderFigure.config.color) {
+      throw new Error("Cannot attack figure of the same color");
     }
 
     const attackerPlayer = game.players.find((player) => player.figures.includes(attacker) && player.config.color === attackerFigure.config.color);
@@ -128,7 +169,17 @@ export class SocketGameUtils {
       defenderRoll,
     };
 
+    // Check if defender player has any remaining figures; if not, mark as defeated
+    if (!this.checkIfPlayerHasFigures(defenderPlayer)) {
+      response.defeatedPlayerIndex = game.players.indexOf(defenderPlayer);
+      defenderPlayer.config.isDefeated = true;
+    }
+
     return response;
+  }
+
+  static checkIfPlayerHasFigures(player: IPlayer): boolean {
+    return player.figures.length > 0;
   }
 
   static rollDice(diceCount: number): number {
@@ -148,7 +199,7 @@ export class SocketGameUtils {
     if (!game) {
       throw new Error("Game not found");
     }
-    const player = game.players.find((p) => p.id === userId);
+    const player = game.players.find((p) => p.user?.id === userId);
     if (!player) {
       throw new Error("Player not found");
     }
@@ -156,13 +207,10 @@ export class SocketGameUtils {
     const response: IJoinGameResponse = {
       gameId,
       player,
-      user: {
-        id: userId,
-        username: user.username,
-      },
+      onlinePlayers: [player.user!.id],
     };
 
-    log(`Enriched join game payload for gameId: ${gameId}, ${response}`);
+    console.log(`Enriched join game payload for gameId: ${gameId}, ${response}`);
     return response;
   }
 }

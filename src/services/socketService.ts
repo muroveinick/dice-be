@@ -1,16 +1,15 @@
-import { IJoinGameResponse } from '@shared/interfaces.js';
-import { Server, Socket } from 'socket.io';
-import { IJoinGamePayload, ITurnUpdatePayload, SocketEvents } from '../../dice-shared/socket.js';
-import { io } from '../server.js';
-import { SocketGameUtils } from './SocketGameUtils.js';
+import { Server, Socket } from "socket.io";
+import { IJoinGamePayload, IJoinGameResponse, ITurnUpdatePayload, SocketEvents } from "../../dice-shared/socket.js";
+import { io } from "../server.js";
+import { SocketGameUtils } from "./SocketGameUtils.js";
 
 export const defaultConfig = {
   cors: {
     origin: "*", // In production, change to specific origin
     methods: ["GET", "POST"],
   },
-  path: "/ws"
-}
+  path: "/api/ws",
+};
 
 // Define game action types
 export interface GameActionData {
@@ -24,8 +23,9 @@ export interface GameActionData {
 
 export class SocketService {
   private io: Server;
-  // Store join events per game to replay for late joiners
-  private gameJoinEvents: Map<string, IJoinGameResponse[]> = new Map();
+
+  // Track which user (by userId) is connected via which socket to which game
+  private socketUserMap: Map<string, { gameId: string; userId: string }> = new Map();
 
   constructor(io: Server) {
     this.io = io;
@@ -41,62 +41,65 @@ export class SocketService {
   }
 
   private setupListeners(socket: Socket): void {
+    try {
+      // Disconnect event
+      socket.on(SocketEvents.DISCONNECT, () => {
+        console.log(`User disconnected: ${socket.id}`);
+        const mapping = this.socketUserMap.get(socket.id);
+        if (mapping) {
+          const { gameId, userId } = mapping;
+          // Optionally notify others that player went offline
+          this.emitToGame(gameId, SocketEvents.OFFLINE, { userId });
+          this.socketUserMap.delete(socket.id);
+        }
+      });
 
-    // Disconnect event
-    socket.on(SocketEvents.DISCONNECT, () => {
-      console.log(`User disconnected: ${socket.id}`);
-    });
+      // Join game room
+      socket.on(SocketEvents.JOIN_GAME, async (payload: IJoinGamePayload) => {
+        console.log(`User joined game: ${payload.gameId}`);
+        const { gameId, userId } = payload;
+        socket.join(gameId);
+        // Remember mapping to clean up later on disconnect
+        this.socketUserMap.set(socket.id, { gameId, userId });
 
-    // Join game room
-    socket.on(SocketEvents.JOIN_GAME, async (payload: IJoinGamePayload) => {
-      const { gameId, userId } = payload;
+        const response = await SocketGameUtils.enrichJoinGamePayload(gameId, userId); // Enrich payload with additional info
+        await this.processJoinGame(response);
+      });
 
-      socket.join(gameId);
-      console.log(`Received JOIN_GAME request with gameId: ${gameId}, userId: ${userId}`);
-      const response = await SocketGameUtils.enrichJoinGamePayload(gameId, userId); // Enrich payload with additional info
-      this.processJoinGame(response);
-
-    });
-
-
-    socket.on(SocketEvents.TURN_UPDATE, async (data: ITurnUpdatePayload) => {
-      const response = await SocketGameUtils.processTurnUpdate(data);
-      this.emitToGame(response.gameId, SocketEvents.TURN_UPDATE, response);
-    });
-
+      // Turn update event
+      socket.on(SocketEvents.TURN_UPDATE, async (data: ITurnUpdatePayload) => {
+        const response = await SocketGameUtils.processTurnUpdate(data);
+        this.emitToGame(response.gameId, SocketEvents.TURN_UPDATE, response);
+      });
+    } catch (error) {
+      console.error("Error in setupListeners:", error);
+      this.emitToAll(SocketEvents.ERROR, error);
+    }
   }
 
-
   emitToGame<T>(gameId: string, event: SocketEvents, data: T): void {
-    // console.log(`Emitting ${event} to game ${gameId}:`, data);
+    console.log(`Emitting ${event} to game ${gameId}:`, data);
     this.io.to(gameId).emit(event, data);
   }
 
-  processJoinGame(payload: IJoinGameResponse): void {
-    const { player, user, gameId } = payload;
+  async processJoinGame(payload: IJoinGameResponse): Promise<void> {
+    const { player, gameId, onlinePlayers } = payload;
+    const user = player.user;
 
-    if (!this.gameJoinEvents.has(gameId)) {
-      this.gameJoinEvents.set(gameId, []);
-    }
+    // Gather other online users in this game
+    const onlineUserIds = new Set(
+      Array.from(this.socketUserMap.values())
+        .filter((m) => m.gameId === gameId && m.userId !== user?.id)
+        .map((m) => m.userId)
+    );
 
-    const gameJoins = this.gameJoinEvents.get(gameId)!;
-    const existingJoin = gameJoins.find(join => join.player.id === player.id);
-    if (!existingJoin) {
-      gameJoins.push(payload);
-    }
+    const fullPayload: IJoinGameResponse = {
+      gameId,
+      player,
+      onlinePlayers: onlinePlayers.concat(...onlineUserIds),
+    };
 
-
-    // Send all previous join events to this socket so they know who's in the game
-    const historicalJoins = gameJoins.filter(join => join.user.id !== user.id);
-    if (historicalJoins.length > 0) {
-      console.log(`Sending ${historicalJoins.length} historical join events to ${gameId}`);
-      historicalJoins.forEach(joinEvent => {
-        this.emitToGame(gameId, SocketEvents.JOIN_GAME, joinEvent);
-      });
-    }
-
-
-    this.emitToGame(gameId, SocketEvents.JOIN_GAME, payload);
+    this.emitToGame(gameId, SocketEvents.JOIN_GAME, fullPayload);
   }
 
   /**
@@ -111,20 +114,7 @@ export class SocketService {
    */
   public async getPlayersInGame(gameId: string): Promise<string[]> {
     const sockets = await this.io.in(gameId).fetchSockets();
-    return sockets.map(socket => socket.id);
-  }
-
-  /**
-   * Clear join events for a game (call when game ends to prevent memory leaks)
-   * 
-   * TODO: Call this method when:
-   * - Game status changes to "FINISHED"
-   * - Game is deleted
-   * - After a certain period of inactivity
-   */
-  public clearGameJoinHistory(gameId: string): void {
-    this.gameJoinEvents.delete(gameId);
-    console.log(`Cleared join history for game ${gameId}`);
+    return sockets.map((socket) => socket.id);
   }
 
   private static _instance: SocketService | null = null;

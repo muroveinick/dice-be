@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import * as gameService from "../services/gameService.js";
 import { IGame } from "@shared/interfaces.js";
 import { ApiError } from "src/utils/errorUtils.js";
+import { HydratedDocument } from "mongoose";
 
 
 export const getGames = async (_req: Request, res: Response) => {
@@ -68,14 +69,14 @@ export const postGame = async (req: Request, res: Response) => {
     }
 
     const if_existing = await gameService.getGameById(game._id);
-    // console.log("Game already exists:", !!if_existing);
     let result;
     if (!if_existing) {
       result = await gameService.saveGame(req.body);
     } else {
       result = await gameService.updateGame(game._id, req.body);
     }
-    // console.log("Result:", !!result);
+
+    await gameService.patchPlayerInsideGame(result as HydratedDocument<IGame>, user);
 
     res.json(result);
   } catch (error) {

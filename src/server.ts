@@ -40,10 +40,6 @@ app.use("/api", apiRoutes);
 // Error handling middleware
 app.use(errorHandler);
 
-// socket
-app.set("io", io);
-app.set("socketService", socketService);
-
 httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

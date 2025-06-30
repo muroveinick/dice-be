@@ -1,9 +1,8 @@
-import { IGame, IJoinGameResponse, IPlayer, IUserScheme } from "@shared/interfaces.js";
+import { IGame, IPlayer, IUserScheme } from "@shared/interfaces.js";
 import { Game } from "models/Game.js";
-import mongoose from "mongoose";
+import { HydratedDocument } from "mongoose";
 import { ApiError } from "src/utils/errorUtils.js";
 import "../utils/proto.implementation.js";
-import { SocketService } from "./socketService.js";
 
 /**
  * Get all games
@@ -18,11 +17,10 @@ export const getAllGames = async (): Promise<IGame[]> => {
  */
 export const getGameById = async (gameId: string): Promise<IGame | null> => {
   const game = await Game.findById(gameId);
-  console.log("Game found:", game?._id);
 
   if (!game) {
     return null;
-  };
+  }
 
   return game;
 };
@@ -41,68 +39,43 @@ export const updateGame = async (gameId: string, gameData: Partial<IGame>): Prom
   return game!;
 };
 
-/**
- * Join a game
- */
+export const patchPlayerInsideGame = async (game: HydratedDocument<IGame>, user: IUserScheme): Promise<IPlayer> => {
+  const players = game.players;
 
+  const is_player_already_in_game = players.find((player) => player.user?.id === user._id.toString());
+  if (is_player_already_in_game) {
+    return is_player_already_in_game;
+  }
 
-const patchPlayerInsideGame = async (game: mongoose.Document<any>, player: IPlayer, playerId: string) => {
-  console.log("Patching player:", player);
+  const player = players.filter((p) => !p.user && p.config.isDefeated !== true).random();
 
-  player.id = playerId;
+  player.user = {
+    id: user._id.toString(),
+    username: user.username,
+  };
   player.config.isAuto = false;
-  game.markModified('players');
+  game.markModified("players");
   await game.save();
-}
+  return player;
+};
 
-export const joinGame = async (gameId: string, user: IUserScheme): Promise<IJoinGameResponse> => {
-
-  const userId = user._id.toString();
-
+export const joinGame = async (gameId: string, user: IUserScheme): Promise<IGame> => {
   try {
-    const game = await Game.findById(gameId);
+    const game = await Game.findById<HydratedDocument<IGame>>(gameId);
 
     if (!game) {
       throw ApiError.notFound("Game not found");
     }
 
-    // Check if the game is full (assuming max 4 players for now)
-    // if (game.players.length >= 4) {
-    //   throw new Error("Game is full");
-    // }
-
     // check if any available player slot is empty
-    const gameIsFull = game.players.every((player) => player.id);
+    const gameIsFull = game.players.every((player) => player.user);
     if (gameIsFull) {
       throw ApiError.badRequest("Game is full");
     }
 
-    let player: IPlayer;
-    const is_player_already_in_game = game.players.find(player => player.id === userId);
+    await patchPlayerInsideGame(game, user);
 
-    if (is_player_already_in_game) {
-      player = is_player_already_in_game;
-    } else {
-      // bind random slot to player
-      const player_sorted = game.players.filter((player) => !player.id);
-      player = player_sorted.random();
-    }
-
-    const response: IJoinGameResponse = {
-      gameId,
-      user: {
-        id: userId,
-        username: user.username
-      },
-      player
-    };
-
-
-    // For WebSocket, we need to track some player identity
-    await patchPlayerInsideGame(game, response.player, userId);
-    SocketService.getInstance().processJoinGame(response);
-    return response;
-
+    return game;
   } catch (error) {
     throw ApiError.internal("Error joining game");
   }
