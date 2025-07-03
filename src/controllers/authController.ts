@@ -1,4 +1,4 @@
-import { ILoginResponse } from "@shared/interfaces.js";
+import { ILoginResponse, IUser, IUserScheme } from "@shared/interfaces.js";
 import crypto from "crypto";
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
@@ -8,13 +8,12 @@ import { _register } from "src/services/authService.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { ApiError } from "../utils/errorUtils.js";
 
-const JWT_SECRET = process.env.JWT_SECRET;
-const JWT_REFRESH_EXPIRES = process.env.JWT_REFRESH_EXPIRES;
+const JWT_SECRET = process.env.JWT_SECRET!;
+const JWT_REFRESH_EXPIRES = (process.env.JWT_REFRESH_EXPIRES || "7d") as any;
 
 const createAuthToken = async (userId: string): Promise<string> => {
   const payload = { id: userId };
 
-  // @ts-ignore - Ignoring type checking for jwt.sign to avoid complex type issues
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_REFRESH_EXPIRES });
 
   const expiryDate = new Date();
@@ -32,8 +31,6 @@ const createAuthToken = async (userId: string): Promise<string> => {
 
 // Register new user
 export const register = asyncHandler(async (req: Request, res: Response) => {
-  console.log("Registering new user");
-  console.log(req.body);
   const { email, password, username } = req.body;
 
   if (!email || !password || !username) {
@@ -50,12 +47,11 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
 
   const token = await createAuthToken(user.id);
 
-
   res.status(201).json({
     status: "success",
     message: "User registered successfully. Please verify your email.",
     user,
-    token
+    token,
   });
 });
 
@@ -66,8 +62,8 @@ export const login = asyncHandler(async (req: Request, res: Response<ILoginRespo
     throw ApiError.badRequest("Please provide email and password");
   }
 
-  const user = await User.findOne({ email });
-  console.log(user);
+  const user = await User.findOne<IUserScheme>({ email });
+
   if (user) {
     const compare = await user.comparePassword(password);
     if (!compare) {
@@ -81,7 +77,6 @@ export const login = asyncHandler(async (req: Request, res: Response<ILoginRespo
   const token = await createAuthToken(userId);
 
   res.status(200).json({
-    status: "success",
     token,
     user: {
       id: userId,
@@ -155,7 +150,6 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
-
 // TODO reset password
 // Request password reset
 export const forgotPassword = asyncHandler(async (req: Request, res: Response) => {
@@ -227,7 +221,6 @@ export const resetPassword = asyncHandler(async (req: Request, res: Response) =>
 
 // Get current user
 export const getMe = asyncHandler(async (req: Request, res: Response) => {
-
   const user = req.user;
 
   if (!user) {
@@ -235,12 +228,9 @@ export const getMe = asyncHandler(async (req: Request, res: Response) => {
   }
 
   res.status(200).json({
-    user: {
-      email: user.email,
-      username: user.username,
-      role: user.role,
-      id: user._id.toString(),
-    },
-    status: "success",
-  } as Pick<ILoginResponse, "user" | "status">);
+    email: user.email,
+    username: user.username,
+    role: user.role,
+    id: user._id.toString(),
+  } as IUser);
 });

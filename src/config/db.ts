@@ -3,8 +3,6 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-let dbConnected = false;
-
 const connectDB = async (): Promise<boolean> => {
   try {
     const protocol = "mongodb";
@@ -18,14 +16,11 @@ const connectDB = async (): Promise<boolean> => {
     const mongoUri = process.env.MONGODB_URI || `${protocol}://${username}:${password}@${host}:${port}/${database}`;
     await mongoose.connect(mongoUri);
     console.log("Connected to MongoDB");
-    dbConnected = true;
     return true;
   } catch (err) {
     console.error("MongoDB connection error:", err);
-    console.log("Running with mock data instead of MongoDB");
-    dbConnected = false;
     return false;
   }
 };
 
-export { connectDB, dbConnected };
+export { connectDB };

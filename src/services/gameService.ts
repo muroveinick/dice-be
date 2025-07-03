@@ -1,4 +1,4 @@
-import { IGame, IPlayer, IUserScheme } from "@shared/interfaces.js";
+import { GamePhase, IGame, IPlayer, IUserScheme } from "@shared/interfaces.js";
 import { Game } from "models/Game.js";
 import { HydratedDocument } from "mongoose";
 import { ApiError } from "src/utils/errorUtils.js";
@@ -7,8 +7,24 @@ import "../utils/proto.implementation.js";
 /**
  * Get all games
  */
-export const getAllGames = async (): Promise<IGame[]> => {
-  const games = await Game.find().limit(10);
+export const getAllGames = async (params?: { sortBy?: "createdAt" | "name" | "lastActivity"; sortDir?: "asc" | "desc"; gamePhase?: GamePhase }): Promise<IGame[]> => {
+  const query: Record<string, unknown> = {};
+
+  // filter by game phase if provided
+  if (params?.gamePhase) {
+    query.gamePhase = params.gamePhase;
+  }
+
+  // start building mongoose query
+  let mongooseQuery = Game.find(query);
+
+  // apply sorting if requested
+  const field = params?.sortBy || "lastActivity";
+  const direction = params?.sortDir || "desc";
+  mongooseQuery = mongooseQuery.sort({ [field]: direction });
+  mongooseQuery = mongooseQuery.limit(10);
+
+  const games = await mongooseQuery.exec();
   return games;
 };
 

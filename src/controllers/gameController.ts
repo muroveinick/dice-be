@@ -1,14 +1,18 @@
 import { Request, Response } from "express";
 import * as gameService from "../services/gameService.js";
-import { IGame } from "@shared/interfaces.js";
+import { GamePhase, IGame } from "@shared/interfaces.js";
 import { ApiError } from "src/utils/errorUtils.js";
 import { HydratedDocument } from "mongoose";
 
-
-export const getGames = async (_req: Request, res: Response) => {
+export const getGames = async (req: Request, res: Response) => {
   try {
+    const { sort_by, sort_dir, phase } = req.query;
 
-    const games = await gameService.getAllGames();
+    const games = await gameService.getAllGames({
+      sortBy: sort_by as "createdAt" | "name" | "lastActivity" | undefined,
+      sortDir: sort_dir as "asc" | "desc" | undefined,
+      gamePhase: phase as GamePhase | undefined,
+    });
     res.json(games);
   } catch (error) {
     console.error("Error in getGames controller:", error);
@@ -40,10 +44,9 @@ export const getGameById = async (req: Request, res: Response) => {
  */
 export const joinGame = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const user = req.user
+  const user = req.user;
 
   console.log("User:", user);
-
 
   if (!user) {
     throw ApiError.unauthorized("User not found");

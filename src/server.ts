@@ -6,6 +6,7 @@ import { Server } from "socket.io";
 import { connectDB } from "./config/db.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { requestLogger } from "./middleware/logger.js";
+import { rateLimiter } from "./middleware/rateLimiter.js";
 import apiRoutes from "./routes/index.js";
 import { SocketService, defaultConfig } from "./services/socketService.js";
 
@@ -28,6 +29,7 @@ const corsOptions = {
 
 // Middleware
 app.use(cors(corsOptions));
+app.use(rateLimiter);
 app.use(express.json());
 app.use(requestLogger);
 

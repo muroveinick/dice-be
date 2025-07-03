@@ -121,9 +121,18 @@ export class SocketGameUtils {
   }
 
   static processBattle(inputData: IGameBattlePayload, game: IGame): IGameBattleResponse {
-    const { attacker, defender } = inputData;
+    const { attacker, defender, playerIndex } = inputData;
     const attackerFigure = game.figures.find((fig) => fig.config.index === attacker);
     const defenderFigure = game.figures.find((fig) => fig.config.index === defender);
+
+    const player = game.players[playerIndex];
+    if (!player) {
+      throw new Error("Invalid player index");
+    }
+    // attacker figure must be belong to player
+    if (!player.figures.includes(attacker)) {
+      throw new Error("Invalid figure indices");
+    }
 
     if (!attackerFigure || !defenderFigure) {
       throw new Error("Invalid figure indices");
