@@ -1,14 +1,15 @@
+import { SocketEvents } from "@shared/socket.js";
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import { createServer } from "http";
-import { Server } from "socket.io";
+import { Server, Socket } from "socket.io";
 import { connectDB } from "./config/db.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { requestLogger } from "./middleware/logger.js";
-import { rateLimiter } from "./middleware/rateLimiter.js";
+import { rateLimiter, socketLimiter } from "./middleware/rateLimiter.js";
 import apiRoutes from "./routes/index.js";
-import { SocketService, defaultConfig } from "./services/socketService.js";
+import { defaultConfig, SocketService } from "./services/socketService.js";
 
 dotenv.config();
 
@@ -35,7 +36,16 @@ app.use(requestLogger);
 
 await connectDB();
 
-const socketService = SocketService.getInstance();
+SocketService.getInstance();
+
+io.use(async (socket: Socket, next) => {
+  try {
+    await socketLimiter.consume(socket.id);
+    next();
+  } catch {
+    socket.emit(SocketEvents.ERROR, { message: "Rate limit exceeded" });
+  }
+});
 
 app.use("/api", apiRoutes);
 

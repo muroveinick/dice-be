@@ -1,7 +1,7 @@
 import { IFigure, IGame, IPlayer } from "@shared/interfaces.js";
 import { Game } from "models/Game.js";
 import { User } from "models/User.js";
-import { IJoinGameResponse, IGameBattlePayload, IGameBattleResponse, INextTurnPayload, INextTurnResponse, ITurnUpdatePayload, ITurnUpdateResponse, TurnMessageType } from "../../dice-shared/socket.js";
+import { IGameBattlePayload, IGameBattleResponse, IJoinGameResponse, INextTurnPayload, INextTurnResponse, ITurnUpdatePayload, ITurnUpdateResponse, TurnMessageType } from "../../dice-shared/socket.js";
 import "../utils/proto.implementation.js";
 
 export class SocketGameUtils {
@@ -208,7 +208,7 @@ export class SocketGameUtils {
     if (!game) {
       throw new Error("Game not found");
     }
-    const player = game.players.find((p) => p.user?.id === userId);
+    const player = game.players.find((p) => p.user?.id?.toString() === userId);
     if (!player) {
       throw new Error("Player not found");
     }
@@ -216,10 +216,45 @@ export class SocketGameUtils {
     const response: IJoinGameResponse = {
       gameId,
       player,
-      onlinePlayers: [player.user!.id],
+      onlinePlayers: [player.user!.id.toString()],
     };
 
     console.log(`Enriched join game payload for gameId: ${gameId}, ${response}`);
     return response;
+  }
+
+  /**
+   * Create / release the auto-play controller for a game.
+   *
+   * @param gameId   ID of the game document
+   * @param socketId Socket.id that is requesting the change
+   * @param enable   true to claim, false to release (if owner)
+   * @returns        { changed, controllerId } – whether DB changed and current controllerId after op
+   */
+  static async updateAutoPlayController(gameId: string, socketId: string, enable: boolean): Promise<{ changed: boolean; controllerId: string | null }> {
+    const game = await Game.findById(gameId);
+    if (!game) {
+      throw new Error("Game not found");
+    }
+
+    let changed = false;
+
+    if (enable) {
+      if (!game.autoPlayControllerId) {
+        game.autoPlayControllerId = socketId;
+        changed = true;
+      }
+    } else {
+      if (game.autoPlayControllerId === socketId) {
+        game.autoPlayControllerId = null;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      await game.save();
+    }
+
+    return { changed, controllerId: game.autoPlayControllerId ?? null };
   }
 }

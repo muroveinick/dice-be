@@ -76,7 +76,7 @@ export const postGame = async (req: Request, res: Response) => {
     if (!if_existing) {
       result = await gameService.saveGame(req.body);
     } else {
-      result = await gameService.updateGame(game._id, req.body);
+      result = await gameService.updateGame(game._id.toString(), req.body);
     }
 
     await gameService.patchPlayerInsideGame(result as HydratedDocument<IGame>, user);

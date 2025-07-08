@@ -1,178 +1,128 @@
-// Player Schema Validation
-const playerValidation = {
+// ------------------------------------------------------
+// Validation blocks kept in sync with Mongoose schemas
+// ------------------------------------------------------
+
+// Colour enum from dice-shared/data.ts
+const COLOR_KEYS = ["RED", "BLUE", "GREEN", "YELLOW", "PURPLE", "ORANGE", "PINK"];
+
+// Re-usable coordinate pair  { col, row }
+const coordinateValidation = {
   bsonType: "object",
-  required: ["id", "name", "color"],
+  required: ["col", "row"],
   properties: {
-    id: {
-      bsonType: "string",
-      description: "Player identifier",
-    },
-    name: {
-      bsonType: "string",
-      description: "Player name",
-    },
-    color: {
-      bsonType: "string",
-      description: "Player color",
-    },
-    score: {
-      bsonType: "int",
-      description: "Player score",
-    },
-    isOnline: {
-      bsonType: "bool",
-      description: "Whether the player is currently online",
-    },
-    lastActivity: {
-      bsonType: "date",
-      description: "When the player was last active",
-    },
+    col: { bsonType: "int" },
+    row: { bsonType: "int" },
   },
 };
 
-// Cell Schema Validation
-const cellValidation = {
+// Hex = { coordinates, parent }
+const hexValidation = {
   bsonType: "object",
-  required: ["x", "y", "type"],
+  required: ["coordinates", "parent"],
   properties: {
-    x: {
-      bsonType: "int",
-      description: "X-coordinate",
-    },
-    y: {
-      bsonType: "int",
-      description: "Y-coordinate",
-    },
-    type: {
-      bsonType: "string",
-      enum: ["EMPTY", "WALL", "SPAWN", "SPECIAL"],
-      description: "Type of cell",
-    },
-    occupiedBy: {
-      bsonType: ["string", "null"],
-      description: "ID of figure occupying this cell, if any",
-    },
+    coordinates: coordinateValidation,
+    parent: { bsonType: "int" },
   },
 };
 
-// Grid Schema Validation
-const gridValidation = {
-  bsonType: "object",
-  required: ["cells", "width", "height"],
-  properties: {
-    cells: {
-      bsonType: "array",
-      items: {
-        bsonType: "array",
-        items: cellValidation,
-      },
-      description: "2D array of cells",
-    },
-    width: {
-      bsonType: "int",
-      description: "Width of the grid",
-    },
-    height: {
-      bsonType: "int",
-      description: "Height of the grid",
-    },
-  },
-};
+// ------------------------------------
+// Figures, Players, Grid, Game
+// ------------------------------------
 
-// Figure Schema Validation
 const figureValidation = {
   bsonType: "object",
-  required: ["id", "playerId", "type", "position"],
+  required: ["config", "linked_hexes", "dice", "center"],
   properties: {
-    id: {
-      bsonType: "string",
-      description: "Figure identifier",
-    },
-    playerId: {
-      bsonType: "string",
-      description: "ID of the player who owns this figure",
-    },
-    type: {
-      bsonType: "string",
-      enum: ["PAWN", "KNIGHT", "BISHOP", "ROOK", "QUEEN", "KING"],
-      description: "Type of figure",
-    },
-    position: {
+    config: {
       bsonType: "object",
-      required: ["x", "y"],
+      required: ["color", "initialHex", "index"],
       properties: {
-        x: {
-          bsonType: "int",
-          description: "X-coordinate",
-        },
-        y: {
-          bsonType: "int",
-          description: "Y-coordinate",
-        },
+        color: { bsonType: "string", enum: COLOR_KEYS },
+        initialHex: hexValidation,
+        index: { bsonType: "int" },
       },
-      description: "Figure position",
     },
-    moveCount: {
-      bsonType: "int",
-      description: "Number of moves this figure has made",
+    linked_hexes: { bsonType: "array", items: hexValidation },
+    dice: { bsonType: "int" },
+    center: coordinateValidation,
+  },
+};
+
+const playerValidation = {
+  bsonType: "object",
+  required: ["config", "figures"],
+  properties: {
+    config: {
+      bsonType: "object",
+      required: ["color", "isAuto"],
+      properties: {
+        color: { bsonType: "string", enum: COLOR_KEYS },
+        isAuto: { bsonType: "bool" },
+        isDefeated: { bsonType: "bool" },
+      },
     },
-    isActive: {
-      bsonType: "bool",
-      description: "Whether this figure is still active in the game",
+    figures: { bsonType: "array", items: { bsonType: "int" } }, 
+    user: {
+      bsonType: "object",
+      properties: {
+        id: { bsonType: "objectId" },
+        username: { bsonType: "string" },
+      },
     },
   },
 };
 
-// Game Schema Validation (Complete)
+// Grid in the current model is a simple coordinate pair
+const gridValidation = {
+  bsonType: "object",
+  required: ["cols", "rows"],
+  properties: {
+    cols: { bsonType: "int" },
+    rows: { bsonType: "int" },
+  },
+};
+
+// ------------------------------------
+// Tokens & Game
+// ------------------------------------
+
+const tokenValidation = {
+  bsonType: "object",
+  required: ["userId", "token", "type", "expiresAt", "createdAt"],
+  properties: {
+    userId: { bsonType: "objectId" },
+    token: { bsonType: "string" },
+    type: { bsonType: "string", enum: ["auth", "blacklisted"] },
+    expiresAt: { bsonType: "date" },
+    createdAt: { bsonType: "date" },
+  },
+};
+
 const gameValidation = {
   bsonType: "object",
-  required: [
-    "id",
-    "players",
-    "currentPlayerIndex",
-    "gamePhase",
-    "turnCount",
-    "grid",
-    "figures",
-    "createdAt",
-    "lastActivity",
-  ],
+  required: ["name", "players", "currentPlayerIndex", "gamePhase", "turnCount", "grid", "figures", "createdAt", "lastActivity"],
   properties: {
-    id: {
-      bsonType: "string",
-      description: "Game identifier",
-    },
-    players: {
-      bsonType: "array",
-      items: playerValidation,
-      description: "Array of players",
-    },
-    currentPlayerIndex: {
-      bsonType: "int",
-      description: "Index of the current player",
-    },
-    gamePhase: {
-      bsonType: "string",
-      enum: ["SETUP", "PLAYING", "FINISHED"],
-      description: "Current phase of the game",
-    },
-    turnCount: {
-      bsonType: "int",
-      description: "Number of turns completed",
-    },
+    name: { bsonType: "string" },
+    players: { bsonType: "array", items: playerValidation },
+    currentPlayerIndex: { bsonType: "int" },
+    gamePhase: { bsonType: "string", enum: ["SETUP", "PLAYING", "FINISHED"] },
+    turnCount: { bsonType: "int" },
     grid: gridValidation,
-    figures: {
-      bsonType: "array",
-      items: figureValidation,
-      description: "Array of figures on the board",
-    },
-    createdAt: {
-      bsonType: "date",
-      description: "When the game was created",
-    },
-    lastActivity: {
-      bsonType: "date",
-      description: "When the game was last active",
-    },
+    figures: { bsonType: "array", items: figureValidation },
+    createdAt: { bsonType: "date" },
+    lastActivity: { bsonType: "date" },
+    autoPlayControllerId: { bsonType: ["string", "null"] },
   },
+};
+
+// ------------------------------------------------------
+// Keep exports exactly as init.js expects
+// ------------------------------------------------------
+/* eslint-disable no-unused-vars, @typescript-eslint/no-unused-vars */
+module.exports = {
+  playerValidation,
+  figureValidation,
+  gridValidation,
+  tokenValidation,
+  gameValidation,
 };

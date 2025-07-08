@@ -1,4 +1,4 @@
-import { GamePhase, IGame, IPlayer, IUserScheme } from "@shared/interfaces.js";
+import { GamePhase, IGame, IPlayer, IUserScheme, ObjectId } from "@shared/interfaces.js";
 import { Game } from "models/Game.js";
 import { HydratedDocument } from "mongoose";
 import { ApiError } from "src/utils/errorUtils.js";
@@ -31,7 +31,7 @@ export const getAllGames = async (params?: { sortBy?: "createdAt" | "name" | "la
 /**
  * Get a single game by ID
  */
-export const getGameById = async (gameId: string): Promise<IGame | null> => {
+export const getGameById = async (gameId: ObjectId | string): Promise<IGame | null> => {
   const game = await Game.findById(gameId);
 
   if (!game) {
@@ -58,7 +58,7 @@ export const updateGame = async (gameId: string, gameData: Partial<IGame>): Prom
 export const patchPlayerInsideGame = async (game: HydratedDocument<IGame>, user: IUserScheme): Promise<IPlayer> => {
   const players = game.players;
 
-  const is_player_already_in_game = players.find((player) => player.user?.id === user._id.toString());
+  const is_player_already_in_game = players.find((player) => player.user && player.user.id.equals(user._id));
   if (is_player_already_in_game) {
     return is_player_already_in_game;
   }
@@ -66,7 +66,7 @@ export const patchPlayerInsideGame = async (game: HydratedDocument<IGame>, user:
   const player = players.filter((p) => !p.user && p.config.isDefeated !== true).random();
 
   player.user = {
-    id: user._id.toString(),
+    id: user._id,
     username: user.username,
   };
   player.config.isAuto = false;

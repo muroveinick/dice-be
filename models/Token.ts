@@ -26,8 +26,4 @@ const TokenSchema = new mongoose.Schema({
   },
 });
 
-// Index for faster token lookup
-TokenSchema.index({ token: 1, type: 1 });
-TokenSchema.index({ userId: 1, type: 1 });
-
 export const Token = mongoose.model("Token", TokenSchema);

@@ -26,9 +26,6 @@ const UserSchema = new mongoose.Schema({
     enum: ["user", "admin"],
     default: "user",
   },
-  // verificationToken: String,
-  // resetPasswordToken: String,
-  // resetPasswordExpires: Date,
   createdAt: {
     type: Date,
     default: Date.now,
@@ -36,8 +33,6 @@ const UserSchema = new mongoose.Schema({
 });
 
 UserSchema.pre("save", async function (next) {
-  console.log("User pre-save hook");
-  // Only hash the password if it's modified (or new)
   if (!this.isModified("password")) return next();
 
   try {
